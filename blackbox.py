@@ -33,19 +33,26 @@ class Test:
     else:
         successMessage, failMessage, tlTag = 'Passed', 'Failed', '(TL)'
     # Instance methods
-    def __init__(self, inputData, outputData=None, timeLimitTest=False):
+    def __init__(self, inputData, outputData=None, timeLimitTest=False, ignoreMarginalWhitespace=True):
         ''' inputData -- string describing the input.
         outputData -- string describing the output. Can be omitted.
         timeLimitTest -- flag that marks the test as a time-limit (TL) test (perhaps a corner case).
+        ignoreMarginalWhitespace -- whether ignore leading and trailing whitespace or not.
         '''
         type(self).count += 1
         self.index = type(self).count
+        if outputData is not None:
+            self.hasRightAnswer = lambda: True
+            if ignoreMarginalWhitespace:
+                outputData = outputData.strip()
+                self.check = lambda output: outputData == output.strip()
+            else:
+                self.check = lambda output: outputData == output.strip()
+        else:
+            self.hasRightAnswer = lambda: False
+            self.check = lambda output: None
         self.input, self.output  = inputData, outputData
         self.tag = ' ' + self.tlTag if timeLimitTest else ''
-    def hasRightAnswer(self):
-        return self.output is not None
-    def check(self, output):
-        return self.output.strip() == output.strip() if self.hasRightAnswer() else None
     def run(self, binaryFile, timeLimit=1, haltOnError=True):
         ''' binaryFile -- path to the file going to be tested.
         timeLimit -- time limit for this test.
@@ -72,7 +79,7 @@ class Test:
             if not verdict and haltOnError:
                 sys.exit(1)
 
-def test(tests, binaryFile, timeLimit=1, haltOnError=True):
+def test(tests, binaryFile, **kwargs):
     ''' Run the tests one by one.'''
     for test in tests:
-        test.run(binaryFile, timeLimit, haltOnError)
+        test.run(binaryFile, **kwargs)
