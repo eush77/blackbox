@@ -8,7 +8,7 @@ from blackbox import Test, test
 tests = [
     Test('input1', 'output1'),
     Test('input2', 'output2'),
-    Test('immense input', timeLimitTest=True),
+    Test('immense input', tags={Test.TL_TAG}),
     # ...
     ]
 test(tests, './program')
@@ -29,14 +29,16 @@ class Test:
     # Set static tag names depending on output facilities
     if sys.stdout.isatty():
         successMessage, failMessage = '\033[32mPassed\033[0m', '\033[31mFailed\033[0m'
-        tlTag = '\033[36m(TL)\033[0m'
+        TL_TAG = '\033[36mTL\033[0m'
+        ML_TAG = '\033[35mML\033[0m'
     else:
-        successMessage, failMessage, tlTag = 'Passed', 'Failed', '(TL)'
+        successMessage, failMessage = 'Passed', 'Failed'
+        TL_TAG, ML_TAG = 'TL', 'ML'
     # Instance methods
-    def __init__(self, inputData, outputData=None, timeLimitTest=False, ignoreMarginalWhitespace=True):
+    def __init__(self, inputData, outputData=None, tags=set(), ignoreMarginalWhitespace=True):
         ''' inputData -- string describing the input.
         outputData -- string describing the output. Can be omitted.
-        timeLimitTest -- flag that marks the test as a time-limit (TL) test (perhaps a corner case).
+        tags -- tag set, predefined tags are "Test.TL_TAG" for time-consuming tests and "Test.ML_TAG" for memory-consuming tests
         ignoreMarginalWhitespace -- whether ignore leading and trailing whitespace or not.
         '''
         type(self).count += 1
@@ -52,7 +54,7 @@ class Test:
             self.hasRightAnswer = lambda: False
             self.check = lambda output: None
         self.input, self.output  = inputData, outputData
-        self.tag = ' ' + self.tlTag if timeLimitTest else ''
+        self.tag = ' {{{}}}'.format(', '.join(map(str, tags))) if tags else ''
     def run(self, binaryFile, timeLimit=1, haltOnError=True):
         ''' binaryFile -- path to the file going to be tested.
         timeLimit -- time limit for this test.
