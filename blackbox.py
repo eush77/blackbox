@@ -108,9 +108,12 @@ class Test:
 
 class OutputComparator:
     __storage = None
-    def __init__(self, testedBinary, trivialBinary, ignoreMarginalWhitespace=True):
+    def __init__(self, testedBinary, trivialBinary, compare=None, ignoreMarginalWhitespace=True):
         self.testedBinary, self.trivialBinary = testedBinary, trivialBinary
-        if ignoreMarginalWhitespace:
+        if compare:
+            # Custom comparing function
+            self.equal = compare
+        elif ignoreMarginalWhitespace:
             self.equal = lambda output1, output2: output1.strip() == output2.strip()
         else:
             self.equal = operator.eq
@@ -158,17 +161,18 @@ def test(tests, binaryFile, haltOnError=True, **kwargs):
             if not verdict and haltOnError:
                 sys.exit(1)
 
-def stress(testGenerator, testedBinary, trivialBinary, **kwargs):
+def stress(testGenerator, testedBinary, trivialBinary, compare=None, **kwargs):
     ''' Run stress testing.
 
     testGenerator -- generator yielding tests either as strings or Test instances.
     testedBinary, trivialBinary -- executable files to test.
+    compare -- comparing function, should take 2 string outputs ("tested", then "trivial") and return either True or False. 'None' means the default one.
     **kwargs -- arguments for 'Test.run'.
     '''
     if not sys.stdout.isatty():
         print('Stress test should be run in a terminal!')
         sys.exit(2)
-    comparator = OutputComparator(testedBinary, trivialBinary)
+    comparator = OutputComparator(testedBinary, trivialBinary, compare)
     count = 0
     for test in testGenerator:
         count += 1
