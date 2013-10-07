@@ -24,6 +24,20 @@ stress(genTest(), './program', './trivial')
 
 import subprocess, sys, operator, functools
 from tempfile import TemporaryFile
+from signal import signal, SIGINT, SIG_IGN
+
+class SignalHandler:
+    def __init__(self):
+        self.signalled = False
+        signal(SIGINT, self.signal)
+    def signal(self, *vargs):
+        if self.signalled:
+            # Force shutdown
+            sys.exit(0)
+        self.signalled = True
+    def childBehavior(self):
+        signal(SIGINT, SIG_IGN)
+signalHandler = SignalHandler()
 
 class TemporaryFileStorage:
     def __init__(self):
@@ -102,7 +116,8 @@ class Test:
             storage = self.__store(self.input)
         try:
             return subprocess.check_output([binaryFile], stdin=storage.buffer(),
-                                           timeout=timeLimit).decode(outputEncoding)
+                                           timeout=timeLimit, preexec_fn=signalHandler.childBehavior
+                                           ).decode(outputEncoding)
         except subprocess.TimeoutExpired:
             raise TimeLimitExpiredException(timeLimit)
 
@@ -160,6 +175,8 @@ def test(tests, binaryFile, haltOnError=True, **kwargs):
             print(padding + [failMessage, successMessage][verdict])
             if not verdict and haltOnError:
                 sys.exit(1)
+        if signalHandler.signalled:
+            sys.exit(0)
 
 def stress(testGenerator, testedBinary, trivialBinary, compare=None, **kwargs):
     ''' Run stress testing.
@@ -181,6 +198,10 @@ def stress(testGenerator, testedBinary, trivialBinary, compare=None, **kwargs):
         print('\rTest #{}:{} {}\033[0K'.format(count, test.tag, __excerpt(test.input)), end='', flush=True)
         try:
             comparator.check(test, **kwargs)
+            if signalHandler.signalled:
+                print('\n\nStress testing mode: {} tests passed.'.format(Test.count),
+                      'No difference spotted.', end='')
+                sys.exit(0)
         except OutputMismatchException as mismatch:
             print('\n\033[31mFailed!\033[0m\n')
             print('Test:', repr(test.input))
