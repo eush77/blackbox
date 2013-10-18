@@ -62,8 +62,15 @@ class TimeLimitExpiredException(Exception):
         self.timeLimit = timeLimit
 
 class OutputMismatchException(Exception):
+    pass
+
+class StressOutputMismatchException(OutputMismatchException):
     def __init__(self, testedOutput, trivialOutput):
         self.testedOutput, self.trivialOutput = testedOutput, trivialOutput
+
+class CompareOutputMismatchException(OutputMismatchException):
+    def __init__(self, output, expectedOutput):
+        self.output, self.expectedOutput = output, expectedOutput
 
 class Test:
     ''' Represents a single test. Each test has an ordinal number and a tag assigned to it.
@@ -94,14 +101,11 @@ class Test:
         self.index = type(self).count
         if outputData is not None:
             self.hasRightAnswer = lambda: True
+            self.ignoreMarginalWhitespace = ignoreMarginalWhitespace
             if ignoreMarginalWhitespace:
                 outputData = outputData.strip()
-                self.check = lambda output: outputData == output.strip()
-            else:
-                self.check = functools.partial(operator.eq, outputData)
         else:
             self.hasRightAnswer = lambda: False
-            self.check = lambda output: None
         self.input, self.output  = inputData, outputData
         self.tag = ' {{{}}}'.format(', '.join(map(str, tags))) if tags else ''
     def run(self, binaryFile, timeLimit=1, outputEncoding='utf8', storage=None):
@@ -120,6 +124,19 @@ class Test:
                                            ).decode(outputEncoding)
         except subprocess.TimeoutExpired:
             raise TimeLimitExpiredException(timeLimit)
+
+class OutputChecker:
+    def __init__(self, testedBinary, compare=None):
+        self.testedBinary = testedBinary
+        self.equal = compare if compare else operator.eq
+    def check(self, test, **kwargs):
+        output = test.run(self.testedBinary, **kwargs)
+        if test.hasRightAnswer():
+            if test.ignoreMarginalWhitespace:
+                output = output.strip()
+            if not self.equal(test.output, output):
+                raise CompareOutputMismatchException(output, test.output)
+        return output
 
 class OutputComparator:
     __storage = None
@@ -140,9 +157,9 @@ class OutputComparator:
         testedOutput = test.run(self.testedBinary, **kwargs)
         trivialOutput = test.run(self.trivialBinary, **kwargs)
         if not self.equal(testedOutput, trivialOutput):
-            raise OutputMismatchException(testedOutput, trivialOutput)
+            raise StressOutputMismatchException(testedOutput, trivialOutput)
 
-def test(tests, binaryFile, haltOnError=True, **kwargs):
+def test(tests, binaryFile, compare=None, haltOnError=True, **kwargs):
     ''' Run the tests one by one.
 
     tests -- iterable collection of Tests.
@@ -155,6 +172,7 @@ def test(tests, binaryFile, haltOnError=True, **kwargs):
     else:
         successMessage, failMessage = 'Passed', 'Failed'
     padding = ' ' * 6
+    checker = OutputChecker(binaryFile, compare)
     for test in tests:
         # Print the header
         print('[Test #{}]{}'.format(test.index, test.tag))
@@ -162,18 +180,23 @@ def test(tests, binaryFile, haltOnError=True, **kwargs):
         if test.output:
             print(padding + 'Expected output:', __excerpt(test.output))
         try:
-            output = test.run(binaryFile, **kwargs)
+            showResult = lambda output: print(padding + 'Output:', __excerpt(output))
+            try:
+                showResult(checker.check(test, **kwargs))
+                print(padding + successMessage)
+            except OutputMismatchException as e:
+                showResult(e.output)
+                raise
+            except:
+                raise
         except TimeLimitExpiredException:
             print(padding + '{} by timeout'.format(failMessage))
             if haltOnError:
                 sys.exit(1)
             continue
-        print(padding + 'Output:', __excerpt(output))
-        # Compare to the correct answer, if any
-        verdict = test.check(output)
-        if verdict is not None:
-            print(padding + [failMessage, successMessage][verdict])
-            if not verdict and haltOnError:
+        except OutputMismatchException:
+            print(padding + failMessage)
+            if haltOnError:
                 sys.exit(1)
         if signalHandler.signalled:
             sys.exit(0)
