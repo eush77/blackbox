@@ -88,13 +88,15 @@ class Test:
     if sys.stdout.isatty():
         TL_TAG = '\033[36mTL\033[0m'
         ML_TAG = '\033[35mML\033[0m'
+        BUG_TAG = '\033[33mBUG\033[0m'
     else:
         TL_TAG, ML_TAG = 'TL', 'ML'
+        BUG_TAG = 'BUG'
     # Instance methods
     def __init__(self, inputData, outputData=None, tags=set(), ignoreMarginalWhitespace=True):
         ''' inputData -- string describing the input.
         outputData -- string describing the output. Can be omitted.
-        tags -- tag set, predefined tags are "Test.TL_TAG" for time-consuming tests and "Test.ML_TAG" for memory-consuming tests.
+        tags -- tag set, predefined tags are "Test.TL_TAG" for time-consuming tests, "Test.ML_TAG" for memory-consuming tests, and "Test.BUG_TAG" for once caught bugs.
         ignoreMarginalWhitespace -- whether ignore leading and trailing whitespace or not.
         '''
         type(self).count += 1
